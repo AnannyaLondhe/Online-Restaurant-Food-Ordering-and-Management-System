@@ -20,10 +20,17 @@ A Python-based object-oriented program to manage restaurant operations, includin
 restaurant-management-system/
 
 ├── main.py                # Entry point for the application
+
 ├── customer.py            # Customer class and related logic
+
 ├── menu.py                # Menu class for handling menu items
+
 ├── restaurant.py          # Restaurant class for managing operations
+
 ├── database.py            # Database connection and queries
+
 ├── setup_schema.sql              # SQL script for setting up the database
+
 ├── exceptions.py           # Custom exceptions for error handling
+
 └── README.md              # Documentation file
