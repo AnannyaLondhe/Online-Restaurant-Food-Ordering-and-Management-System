@@ -18,6 +18,7 @@ A Python-based object-oriented program to manage restaurant operations, includin
 
 **Project Structure** 📂
 restaurant-management-system/
+
 ├── main.py                # Entry point for the application
 ├── customer.py            # Customer class and related logic
 ├── menu.py                # Menu class for handling menu items
