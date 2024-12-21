@@ -17,6 +17,7 @@ A Python-based object-oriented program to manage restaurant operations, includin
 5. The system will calculate the total price based on the discounts and store the order in the database.
 
 **Project Structure** 📂
+
 restaurant-management-system/
 
 ├── main.py                # Entry point for the application
