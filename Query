@@ -1,0 +1,72 @@
+SELECT
+    entities.crdscode,
+    entities.ptyid,
+    TRUNC(entities.kycid) AS kycid,
+    entities.laeitype,
+    entities.laeivalue,
+    kyc.canadianpublicbodyflag,
+    kyc.canadianregulatedpensionfundflag,
+    kyc.canadianclientexemptionflag,
+    kyc.canadiansubsidiaryexemptionflag,
+    TRUNC(association.ass_kycid) AS associate_kycid,
+    association.association_type,
+    association.active_from,
+    association.active_to,
+    individual.firstname,
+    individual.middlename,
+    individual.lastname
+FROM (
+    -- Extracting entities
+    SELECT
+        crdscode,
+        ptyid,
+        kycid,
+        laeitype,
+        laeivalue
+    FROM amlten.t_tpapi_entities
+    WHERE is_active = 1
+      AND laeitype = 'CASRN'
+      AND kycid != 'nan'
+) entities
+JOIN amlten.t_tpapi_entities_kyc kyc 
+    ON TRUNC(entities.kycid) = TRUNC(kyc.kycid)
+JOIN (
+    -- Getting the latest association per entity
+    SELECT
+        ent_crdscode,
+        ent_kycid,
+        ent_ptyid,
+        ass_kycid,
+        association_type,
+        active_from,
+        active_to
+    FROM (
+        SELECT
+            ent_crdscode,
+            ent_kycid,
+            ent_ptyid,
+            ass_kycid,
+            association_type,
+            active_from,
+            active_to,
+            ROW_NUMBER() OVER (
+                PARTITION BY ent_kycid, ass_kycid, association_type
+                ORDER BY active_from DESC
+            ) AS rn
+        FROM amiten.t_tpapi_association
+        WHERE association_type = 'Authorised Signatory'
+    ) association_filtered
+    WHERE rn = 1
+) association 
+    ON TRUNC(entities.kycid) = TRUNC(association.ent_kycid)
+JOIN (
+    -- Extracting individual details, avoiding 'nan' values
+    SELECT
+        id,
+        MAX(CASE WHEN localfirstname = 'nan' THEN firstname ELSE localfirstname END) AS firstname,
+        MAX(CASE WHEN localmiddlename = 'nan' THEN middlename ELSE localmiddlename END) AS middlename,
+        MAX(CASE WHEN locallastname = 'nan' THEN lastname ELSE locallastname END) AS lastname
+    FROM aniten.t_tpapi_individual
+    GROUP BY id
+) individual
+    ON TRUNC(association.ass_kycid) = TRUNC(individual.id);
