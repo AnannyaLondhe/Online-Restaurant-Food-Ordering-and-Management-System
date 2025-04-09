@@ -28,7 +28,7 @@ def ingestion_tpapi(process, as_of_dt):
         status_obj.update_status(operator, 'Change notification call started - 1')
         batch_size = get_batchs(len(crds_code_all), 100)
         lg.rc = load_df_to_oracle(generate_data(crds_code_all, batch_size, process, operator, None),
-                                    operator, process, ['crdsCode', 'kycId', 'ptyId'], as_of_dt)
+                                  operator, process, ['crdsCode', 'kycId', 'ptyId'], as_of_dt)
 
         if lg.rc == 0:
             print(f"{operator} load successfully")
@@ -41,7 +41,6 @@ def ingestion_tpapi(process, as_of_dt):
         lg.end_step()
 
         # --- Step 1: ENTITIES, ASSOCIATION, and ENTITIES_KYC ---
-        # Check for flag if using sys.argv (if needed)
         run_entities = "--run_entities" in sys.argv
         if run_entities:
             lg.step_name = "Executing ENTITIES, ASSOCIATION, and ENTITIES_KYC in one step"
@@ -67,37 +66,33 @@ def ingestion_tpapi(process, as_of_dt):
 
             lg.end_step()
 
-        # --- Final Step: Send Email Notification ---
-        # Here, we're adding the email functionality after all processing is complete.
-        process_name = process  # or any specific process name string you use
-        schema_name = "your_schema_name"  # update this accordingly
-        
-        # Generate your final message. This can summarize results, statistics, etc.
-        final_message = f"""
-        Hello,
-        
-        The ingestion process for {process_name} executed on {as_of_dt_str} has completed.
-        
-        Please find the details below:
-        - Change Notification: {'Successful' if lg.rc == 0 else 'Failed'}
-        - Other Steps: Please check the logs for detailed status.
-        
-        Regards,
-        Automation Bot
-        """
-        
-        # Retrieve additional email information, if needed
-        # (e.g., attachments, email subject, etc.)
-        email_info = get_email_info(process_name, final_message, schema_name)
-        # or fetch email recipients using:
-        email_recipients = get_mail_recipients(process_name, schema_name)
-        
-        subject = f"Ingestion Process Status - {process_name}"
-        
-        # send_mail arguments: process, schema, subject, message, attachment
-        send_mail(process_name, schema_name, subject, final_message, None)
+        # --- Final Step: Send Email Notification (only if load was successful) ---
+        if lg.rc == 0:
+            process_name = process
+            schema_name = "your_schema_name"  # replace with actual schema
 
-        print("Final email sent successfully.")
+            final_message = f"""
+            Hello,
+
+            The ingestion process for {process_name} executed on {as_of_dt_str} has completed successfully.
+
+            Please find the details below:
+            - Change Notification: Successful
+            - Other Steps: Please check the logs for detailed status.
+
+            Regards,
+            Automation Bot
+            """
+
+            email_info = get_email_info(process_name, final_message, schema_name)
+            email_recipients = get_mail_recipients(process_name, schema_name)
+
+            subject = f"Ingestion Process Status - {process_name}"
+            send_mail(process_name, schema_name, subject, final_message, None)
+
+            print("Final email sent successfully.")
+        else:
+            print("Load failed. Email notification skipped.")
 
         return 0
 
