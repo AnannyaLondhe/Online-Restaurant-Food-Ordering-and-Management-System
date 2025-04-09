@@ -1,0 +1,106 @@
+import sys
+import time
+import requests
+from send_mail import get_email_info, get_mail_recipients, send_mail
+
+def ingestion_tpapi(process, as_of_dt):
+    try:
+        # --- Initial Process Steps ---
+        lg.step_name = "getting date to run and CRDS code from DB"
+        lg.start_step()
+
+        crds_code_all = get_crds()
+        print(len(crds_code_all))
+
+        lg.end_step()
+
+        lg.step_name = "Calling Change Notification Call"
+        lg.start_step()
+
+        print(as_of_dt)
+        as_of_dt_str = as_of_dt.strftime('%d-%m-%Y')
+        operator = "CHANGE NOTIFICATION"
+
+        global tp_obj, status_obj
+        tp_obj = TpapiInteract(process, as_of_dt)
+        status_obj = StatusLog(process, as_of_dt.strftime('%d-%m-%Y'))
+
+        status_obj.update_status(operator, 'Change notification call started - 1')
+        batch_size = get_batchs(len(crds_code_all), 100)
+        lg.rc = load_df_to_oracle(generate_data(crds_code_all, batch_size, process, operator, None),
+                                    operator, process, ['crdsCode', 'kycId', 'ptyId'], as_of_dt)
+
+        if lg.rc == 0:
+            print(f"{operator} load successfully")
+            status_obj.update_status(operator, 'Change notification load successfully - 2')
+        else:
+            print(f"{operator} does not load successfully")
+            status_obj.update_status(operator, 'Change notification does not load successfully - 2')
+
+        operator_config_dic, del_crds_rec = impacted_url(as_of_dt_str, process)
+        lg.end_step()
+
+        # --- Step 1: ENTITIES, ASSOCIATION, and ENTITIES_KYC ---
+        # Check for flag if using sys.argv (if needed)
+        run_entities = "--run_entities" in sys.argv
+        if run_entities:
+            lg.step_name = "Executing ENTITIES, ASSOCIATION, and ENTITIES_KYC in one step"
+            lg.start_step()
+
+            for operator, field in operator_config_dic.items():
+                if operator in ["ENTITIES", "ASSOCIATION", "ENTITIES_KYC"]:
+                    print(f"Running {operator}")
+                    lg.rc = endpoint_check(operator, field, process, del_crds_rec)
+
+            lg.end_step()
+
+        # --- Step 2: INDIVIDUAL ---
+        run_individual = "--run_individual" in sys.argv
+        if run_individual:
+            lg.step_name = "Executing INDIVIDUAL in a separate step"
+            lg.start_step()
+
+            for operator, field in operator_config_dic.items():
+                if operator == "INDIVIDUAL":
+                    print(f"Running {operator}")
+                    lg.rc = endpoint_check(operator, field, process, del_crds_rec)
+
+            lg.end_step()
+
+        # --- Final Step: Send Email Notification ---
+        # Here, we're adding the email functionality after all processing is complete.
+        process_name = process  # or any specific process name string you use
+        schema_name = "your_schema_name"  # update this accordingly
+        
+        # Generate your final message. This can summarize results, statistics, etc.
+        final_message = f"""
+        Hello,
+        
+        The ingestion process for {process_name} executed on {as_of_dt_str} has completed.
+        
+        Please find the details below:
+        - Change Notification: {'Successful' if lg.rc == 0 else 'Failed'}
+        - Other Steps: Please check the logs for detailed status.
+        
+        Regards,
+        Automation Bot
+        """
+        
+        # Retrieve additional email information, if needed
+        # (e.g., attachments, email subject, etc.)
+        email_info = get_email_info(process_name, final_message, schema_name)
+        # or fetch email recipients using:
+        email_recipients = get_mail_recipients(process_name, schema_name)
+        
+        subject = f"Ingestion Process Status - {process_name}"
+        
+        # send_mail arguments: process, schema, subject, message, attachment
+        send_mail(process_name, schema_name, subject, final_message, None)
+
+        print("Final email sent successfully.")
+
+        return 0
+
+    except ValueError as e:
+        print("Error occurred:", e)
+        return 1
